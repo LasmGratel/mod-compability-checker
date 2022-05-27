@@ -12,7 +12,6 @@ env:
 jobs:
  deploy:
     name: deploy
-    if: startsWith(github.ref, 'refs/tags/')
     
     strategy: 
       matrix:
