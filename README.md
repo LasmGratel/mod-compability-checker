@@ -1,2 +1,2 @@
 # mod-compability-checker
-Simple program that checks any mod that is client-side only
+Simple program that checks any client-side only mod
