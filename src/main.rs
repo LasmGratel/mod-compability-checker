@@ -7,6 +7,7 @@ use std::io::{BufReader, Cursor, Read};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use futures::executor::block_on;
 use memmap2::MmapMut;
 use rayon::prelude::*;
 use tokio_stream::wrappers::ReadDirStream;
@@ -16,6 +17,18 @@ use mimalloc::MiMalloc;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
+
+#[derive(PartialEq)]
+enum ModType {
+    /// Requires on both side
+    Normal,
+
+    /// Client only
+    ClientOnly,
+
+    /// Don't mind
+    AcceptAllRemote
+}
 
 #[derive(Deserialize, Debug)]
 struct TypedValue {
@@ -64,6 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             //let start = Instant::now();
             let path = &file.path();
             let name = file.file_name().to_string_lossy().to_string();
+            if name.as_str().to_ascii_lowercase().contains("optifine") {
+                return Ok(Some((name, None, true))); // FUCK OPTIFINE
+            }
             let file = File::open(file.path())?;
 
             let mmap = unsafe { memmap2::Mmap::map(&file) }?;
@@ -79,10 +95,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             file.read_to_string(&mut str);
             let entries: HashMap<String, ClassEntry> = simd_json::serde::from_str(&mut str)//serde_json::from_str(&str)
                 .expect(&format!("JSON error while parsing file {:?}", path));
+
             //println!("Read {} took {:?}ms", path.to_str().unwrap(), start.elapsed().as_millis());
-            Ok(Some((name, entries)))
+            Ok(Some((name, Some(entries), false)))
         })
-        .try_filter_map(|(name, map)| async move {
+        .try_filter_map(|(name, map, is_optifine)| async move {
+            if is_optifine {
+                return Ok(Some(name));
+            }
+            let map = map.unwrap();
             if map.into_par_iter().flat_map(|(name, entry)| {
                 match entry.annotations {
                     None => {
@@ -93,7 +114,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }).any(|annotation| {
-                is_client_mod(&annotation)
+                block_on(decl_mod_type(&annotation)) != ModType::Normal
             }) {
                 Ok(Some(name))
             } else {
@@ -122,13 +143,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn is_client_mod(annotation: &Annotation) -> bool {
+async fn decl_mod_type(annotation: &Annotation) -> ModType {
     if annotation.name == "Lnet/minecraftforge/fml/common/Mod;" {
         if let Some(values) = &annotation.values {
-            return values.iter().any(|(name, value)| {
+            let client_only = async { values.iter().any(|(name, value)| {
                 name == "clientSideOnly" && value.value.as_ref().map(|x| x == "true").unwrap_or(false)
-            });
+            }) };
+            let accept_all_remote = async { values.iter().any(|(name, value)| {
+                name == "acceptableRemoteVersions" && value.value.as_ref().map(|x| x == "*").unwrap_or(false)
+            }) };
+            if client_only.await {
+                return ModType::ClientOnly;
+            } else if accept_all_remote.await {
+                return ModType::AcceptAllRemote;
+            }
         }
     }
-    false
+    ModType::Normal
 }
