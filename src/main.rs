@@ -7,9 +7,15 @@ use std::io::{BufReader, Cursor, Read};
 use std::sync::atomic::AtomicU64;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use memmap2::MmapMut;
 use rayon::prelude::*;
 use tokio_stream::wrappers::ReadDirStream;
 use zip::result::ZipResult;
+
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[derive(Deserialize, Debug)]
 struct TypedValue {
@@ -63,13 +69,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mmap = unsafe { memmap2::Mmap::map(&file) }?;
             let cursor = Cursor::new(mmap);
             let mut archive = zip::ZipArchive::new(cursor).unwrap();
-            let file = match archive.by_name("META-INF/fml_cache_annotation.json") {
+            let mut file = match archive.by_name("META-INF/fml_cache_annotation.json") {
                 Ok(f) => f,
                 Err(_) => {
                     return Ok(None);
                 }
             };
-            let entries: HashMap<String, ClassEntry> = serde_json::from_reader(file)
+            let mut str = String::with_capacity(file.size() as usize);
+            file.read_to_string(&mut str);
+            let entries: HashMap<String, ClassEntry> = simd_json::serde::from_str(&mut str)//serde_json::from_str(&str)
                 .expect(&format!("JSON error while parsing file {:?}", path));
             //println!("Read {} took {:?}ms", path.to_str().unwrap(), start.elapsed().as_millis());
             Ok(Some((name, entries)))
