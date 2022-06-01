@@ -50,16 +50,12 @@ jobs:
       - name: Build target
         uses: actions-rs/cargo@v1
         with:
-          use-cross: true
           command: build
-          args: --release --target ${{ matrix.target }}
+          args: --release
 
       - name: Publish
         uses: actions/upload-artifact@master
-        # TODO: if any of the build step fails, the release should be deleted.
         with:
           name: mod-compatibility-checker-${{ matrix.target }}
-          path: ${GITHUB_WORKSPACE}/target/release/mod-compatibility-checker${{ matrix.suffix }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ github.workspace }}/target/release/mod-compatibility-checker${{ matrix.suffix }}
         
