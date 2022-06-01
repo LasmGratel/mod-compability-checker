@@ -1,5 +1,5 @@
 [package]
-name = "mod-compability-checker"
+name = "mod-compatibility-checker"
 version = "0.1.0"
 edition = "2021"
 
@@ -20,6 +20,7 @@ vc-ltl = "5.0"
 blake3 = { version = "1", features = ["rayon"] }
 simd-json = { version = "*" }
 mimalloc = { version = "*", default-features = false }
+clap = { version = "3", features = ["derive"] }
 
 [profile.release]
 panic = "abort"

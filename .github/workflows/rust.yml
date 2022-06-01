@@ -58,8 +58,8 @@ jobs:
         uses: actions/upload-artifact@master
         # TODO: if any of the build step fails, the release should be deleted.
         with:
-          name: mod-compability-checker-${{ matrix.target }}
-          path: ./target/release/mod-compability-checker${{ matrix.suffix }}
+          name: mod-compatibility-checker-${{ matrix.target }}
+          path: ${GITHUB_WORKSPACE}/target/release/mod-compatibility-checker${{ matrix.suffix }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         
