@@ -255,7 +255,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let (tx, rx) = crossbeam_channel::unbounded();
 
-    let instant = std::time::Instant::now();
     stream
         .try_for_each_concurrent(args.threads, |mod_object| {
             let tx = tx.clone();
@@ -271,7 +270,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })
         .await?;
-    println!("Took {:?}", instant.elapsed());
 
     let mut hash = Hasher::new();
     let x: std::io::Result<()> = rx.try_iter().collect::<BTreeSet<Mod>>().into_iter().try_for_each(|x| {
