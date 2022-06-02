@@ -16,12 +16,37 @@ jobs:
     strategy: 
       matrix:
         os: [windows-latest, ubuntu-latest]
+        feature: ['', 'sse4.2', 'avx2']
         include:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+            feature: ''
+            flags: ''
+            suffix: '.exe'
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            feature: 'sse4.2'
+            flags: '-C target-feature=+sse4.2'
+            suffix: '.exe'
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            feature: 'avx2'
+            flags: '-C target-feature=+avx2'
             suffix: '.exe'
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
+            feature: ''
+            flags: ''
+            suffix: ''
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            feature: 'sse4.2'
+            flags: '-C target-feature=+sse4.2'
+            suffix: ''
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            feature: 'avx2'
+            flags: '-C target-feature=+avx2'
             suffix: ''
     runs-on: ${{ matrix.os }}
     steps:
@@ -39,6 +64,10 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Remove cargo config
+        uses: JesseTG/rm@v1.0.2
+        with:
+          path: .cargo
       - name: Install rust
         uses: actions-rs/toolchain@v1
         with:
@@ -49,6 +78,8 @@ jobs:
 
       - name: Build target
         uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: ${{ matrix.flags }}
         with:
           command: build
           args: --release
@@ -56,6 +87,6 @@ jobs:
       - name: Publish
         uses: actions/upload-artifact@master
         with:
-          name: mod-compatibility-checker-${{ matrix.target }}
+          name: mod-compatibility-checker-${{ matrix.feature }}-${{ matrix.target }}
           path: ${{ github.workspace }}/target/release/mod-compatibility-checker${{ matrix.suffix }}
         
