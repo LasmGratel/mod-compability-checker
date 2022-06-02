@@ -27,7 +27,11 @@ If two or more mods directory output the same checksum, they are compatible and 
 
 ## Principle
 
-Checks `META-INF/fml_cache_annotation.json` and get the annotation value, marks all client-only and `acceptableRemoteVersions = "*"` mods.
+1.12.2: Reads `META-INF/fml_cache_annotation.json` and get the annotation value, marks all client-only and `acceptableRemoteVersions = "*"` mods.
+
+1.13+ Forge: Reads `META-INF/mods.toml` and filter mods with `[[dependencies.modid]] side="CLIENT"`
+
+Fabric: Reads `fabric.mod.json` and filter mods with `environment: client`
 
 Hash `modid:version` line or JAR file if strict mode is on.
 
@@ -42,10 +46,10 @@ Hash `modid:version` line or JAR file if strict mode is on.
 
 | Modpack | Avg time | Avg time (Strict) |
 | -- |  -- | -- |
-| Nomifactory | 263.1 ms | 352.6 ms |
-| Enigmatica 2 Expert Skyblock | 313.8 ms | 463.1 ms |
-| FTB Revelation | 354.3 ms | 536.5 ms |
-| FTB University 1.12 | 367.8 ms | 519.1 ms |
+| Nomifactory | 223.6 ms | 313.0 ms |
+| Enigmatica 2 Expert Skyblock | 270.7 ms | 402.4 ms |
+| FTB Revelation | 304.5 ms | 493.5 ms |
+| FTB University 1.12 | 338.5 ms | 478.0 ms |
 
 ## Credits
 
