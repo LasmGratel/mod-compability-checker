@@ -54,6 +54,20 @@ struct Mod {
     mod_type: ModType,
 }
 
+enum ArchiveType {
+    /// Old Forge that does not contains fml_cache_annotations.json
+    OldForge,
+
+    /// mcmod.info & fml_cache_annotations.json exists
+    Forge112,
+
+    /// META-INF/mods.toml exists
+    ForgeToml,
+
+    /// fabric.mod.json exists
+    Fabric
+}
+
 impl PartialEq for Mod {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id && self.version == other.version
@@ -84,6 +98,12 @@ enum ModType {
 
     /// Don't mind
     AcceptAllRemote
+}
+
+#[derive(Deserialize, Debug)]
+struct FabricMod {
+    pub id: String,
+    pub environment: String
 }
 
 #[derive(Deserialize, Debug)]
@@ -130,6 +150,22 @@ async fn walk_dir<P: AsRef<Path>>(path: P) -> std::io::Result<TryFilter<ReadDirS
 
 type ArchiveInfo = (String, Option<HashMap<String, ClassEntry>>, Option<Vec<ModInfo>>, bool);
 
+async fn decl_archive_type(file: &MmapJarFile<'_>) -> Option<ArchiveType> {
+    if file.contains("mcmod.info").await {
+        if file.contains("META-INF/fml_cache_annotation.json").await {
+            Some(ArchiveType::Forge112)
+        } else {
+            Some(ArchiveType::OldForge)
+        }
+    } else if file.contains("META-INF/mods.toml").await {
+        Some(ArchiveType::ForgeToml)
+    } else if file.contains("fabric.mod.json").await {
+        Some(ArchiveType::Fabric)
+    } else {
+        None
+    }
+}
+
 async fn read_archive<P: AsRef<Path>>(path: P) -> std::io::Result<Option<ArchiveInfo>> {
     let path = path.as_ref();
     let file_name = path.file_name().unwrap().to_string_lossy().to_string();
@@ -142,17 +178,28 @@ async fn read_archive<P: AsRef<Path>>(path: P) -> std::io::Result<Option<Archive
 
     let mut archive = MmapJarFile::new(&mmap).await?;
 
-    let annotations = archive.read_to_string("META-INF/fml_cache_annotation.json").await?.map(|mut x| {
-        simd_json::serde::from_str::<HashMap<String, ClassEntry>>(&mut x)//serde_json::from_str(&str)
-            .unwrap_or_else(|_| panic!("JSON error while parsing file {:?}", path))
-    });
+    if let Some(archive_type) = decl_archive_type(&archive).await {
+        return Ok(match archive_type {
+            ArchiveType::Forge112 => {
+                let annotations = archive.read_to_string("META-INF/fml_cache_annotation.json").await?.map(|mut x| {
+                    simd_json::serde::from_str::<HashMap<String, ClassEntry>>(&mut x)//serde_json::from_str(&str)
+                        .unwrap_or_else(|_| panic!("JSON error while parsing file {:?}", path))
+                });
 
-    let info = archive.read_to_string("mcmod.info").await?.and_then(|mut str| {
-        str = str.replace('\n', "");
-        read_mcmod_info(&mut str).ok()
-    });
+                let info = archive.read_to_string("mcmod.info").await?.and_then(|mut str| {
+                    str = str.replace('\n', "");
+                    read_mcmod_info(&mut str).ok()
+                });
+                Some((file_name, annotations, info, false))
+            }
+            ArchiveType::Fabric => {
 
-    Ok(Some((file_name, annotations, info, false)))
+            }
+            _ => None
+        })
+    } else {
+        Ok(None)
+    }
 }
 
 async fn parse_mods(file_name: String, entries: Option<HashMap<String, ClassEntry>>, mod_infos: Option<Vec<ModInfo>>, is_optifine: bool) -> std::io::Result<Option<futures::stream::Iter<IntoIter<std::io::Result<Mod>>>>> {

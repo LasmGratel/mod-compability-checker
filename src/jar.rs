@@ -5,7 +5,10 @@ use std::marker::PhantomData;
 use async_zip::error::ZipError;
 use async_zip::read::fs::ZipFileReader;
 use async_zip::read::{ZipEntry, ZipEntryReader};
+use futures::stream::iter;
+use futures::StreamExt;
 use memmap2::Mmap;
+use simd_json::Array;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeek};
 
 
@@ -48,6 +51,10 @@ impl<'a> MmapJarFile<'a> {
             mmap,
             archive
         })
+    }
+
+    pub async fn contains(&self, name: &str) -> bool {
+        futures::stream::iter(self.archive.entries().iter()).any(|x| async { x.name() == name }).await
     }
 
     pub async fn read_to_string(&mut self, name: &str) -> io::Result<Option<String>> {
