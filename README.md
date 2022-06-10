@@ -46,7 +46,7 @@ Hash `modid:version` line or JAR file if strict mode is on.
 
 | Modpack | Avg time | Avg time (Strict) |
 | -- |  -- | -- |
-| Nomifactory | 223.6 ms | 313.0 ms |
+| Nomifactory | 194.1 ms | 245.3 ms |
 | Enigmatica 2 Expert Skyblock | 270.7 ms | 402.4 ms |
 | FTB Revelation | 304.5 ms | 493.5 ms |
 | FTB University 1.12 | 338.5 ms | 478.0 ms |

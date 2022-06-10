@@ -1,3 +1,6 @@
+mod jar;
+mod reader;
+
 extern crate core;
 
 use std::cmp::Ordering;
@@ -17,6 +20,7 @@ use clap::Parser;
 use memmap2::{Mmap};
 use mimalloc::MiMalloc;
 use tokio::fs::DirEntry;
+use crate::jar::MmapJarFile;
 use crate::stream::TryFilter;
 
 #[global_allocator]
@@ -136,37 +140,19 @@ async fn read_archive<P: AsRef<Path>>(path: P) -> std::io::Result<Option<Archive
 
     let mmap = unsafe { memmap2::Mmap::map(&file) }?;
 
-    let cursor = Cursor::new(&mmap);
-    let mut archive = zip::ZipArchive::new(cursor)?;
-    let mut a2 = archive.clone();
+    let mut archive = MmapJarFile::new(&mmap).await?;
 
-    let annotations = archive.by_name("META-INF/fml_cache_annotation.json");
-    let annotations = async { match annotations {
-        Ok(mut f) => {
-            let mut str = String::with_capacity(f.size() as usize);
-            f.read_to_string(&mut str).unwrap();
-            Some(simd_json::serde::from_str::<HashMap<String, ClassEntry>>(&mut str)//serde_json::from_str(&str)
-                .unwrap_or_else(|_| panic!("JSON error while parsing file {:?}", path)))
-        },
-        Err(_) => {
-            None
-        }
-    } };
+    let annotations = archive.read_to_string("META-INF/fml_cache_annotation.json").await?.map(|mut x| {
+        simd_json::serde::from_str::<HashMap<String, ClassEntry>>(&mut x)//serde_json::from_str(&str)
+            .unwrap_or_else(|_| panic!("JSON error while parsing file {:?}", path))
+    });
 
-    let info = a2.by_name("mcmod.info");
-    let info = async { match info {
-        Ok(mut f) => {
-            let mut str = String::with_capacity(f.size() as usize);
-            f.read_to_string(&mut str).unwrap();
-            str = str.replace('\n', "");
-            read_mcmod_info(&mut str).ok()
-        },
-        Err(_) => {
-            None
-        }
-    } };
+    let info = archive.read_to_string("mcmod.info").await?.and_then(|mut str| {
+        str = str.replace('\n', "");
+        read_mcmod_info(&mut str).ok()
+    });
 
-    Ok(Some((file_name, annotations.await, info.await, false)))
+    Ok(Some((file_name, annotations, info, false)))
 }
 
 async fn parse_mods(file_name: String, entries: Option<HashMap<String, ClassEntry>>, mod_infos: Option<Vec<ModInfo>>, is_optifine: bool) -> std::io::Result<Option<futures::stream::Iter<IntoIter<std::io::Result<Mod>>>>> {
@@ -261,7 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             async move {
                 if mod_object.mod_type != ModType::Normal {
                     if args.verbose {
-                        println!("{}", mod_object.file_name);
+                        println!("{} ({}) - {:?}", mod_object.id, mod_object.file_name, mod_object.mod_type);
                     }
                 } else {
                     tx.send(mod_object).map_err(|e| std::io::Error::new(ErrorKind::Other, e))?;
