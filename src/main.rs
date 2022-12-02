@@ -8,7 +8,7 @@ use futures::{stream, TryStreamExt};
 use std::collections::{BTreeSet, HashMap};
 use std::fs::File;
 
-use std::io::{Cursor, ErrorKind, Read};
+use std::io::{ErrorKind, Read};
 use std::path::{Path};
 use std::vec::IntoIter;
 use blake3::Hasher;
@@ -181,19 +181,19 @@ async fn read_archive<P: AsRef<Path>>(path: P) -> std::io::Result<Option<Archive
     if let Some(archive_type) = decl_archive_type(&archive).await {
         return Ok(match archive_type {
             ArchiveType::Forge112 => {
-                let annotations = archive.read_to_string("META-INF/fml_cache_annotation.json").await?.map(|mut x| {
-                    simd_json::serde::from_str::<HashMap<String, ClassEntry>>(&mut x)//serde_json::from_str(&str)
+                let annotations = archive.read_to_string("META-INF/fml_cache_annotation.json").await?.map(|x| {
+                    serde_json::from_str::<HashMap<String, ClassEntry>>(&x)//serde_json::from_str(&str)
                         .unwrap_or_else(|_| panic!("JSON error while parsing file {:?}", path))
                 });
 
                 let info = archive.read_to_string("mcmod.info").await?.and_then(|mut str| {
                     str = str.replace('\n', "");
-                    read_mcmod_info(&mut str).ok()
+                    read_mcmod_info(&str).ok()
                 });
                 Some((file_name, annotations, info, false))
             }
             ArchiveType::Fabric => {
-
+                None
             }
             _ => None
         })
@@ -244,11 +244,11 @@ async fn parse_mods(file_name: String, entries: Option<HashMap<String, ClassEntr
 }
 
 /// Read mcmod.info string
-fn read_mcmod_info(s: &mut str) -> Result<Vec<ModInfo>, simd_json::Error> {
-    if let Ok(list) = simd_json::serde::from_str::<Vec<ModInfo>>(s) {
+fn read_mcmod_info(s: &str) -> Result<Vec<ModInfo>, serde_json::Error> {
+    if let Ok(list) = serde_json::from_str::<Vec<ModInfo>>(s) {
         Ok(list)
     } else {
-        Ok(simd_json::serde::from_str::<ModList>(s)?.list)
+        Ok(serde_json::from_str::<ModList>(s)?.list)
     }
 }
 
@@ -315,7 +315,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Ok(())
     });
-    let _ = x?;
+    x?;
     let hash = hash.finalize();
     println!("{}", hash.to_hex());
 
